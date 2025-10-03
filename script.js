@@ -1,11 +1,10 @@
-// script.js - SOLUCIÓN DEFINITIVA PARA GITHUB PAGES (usando proxy robusto)
+// script.js (Frontend - Llama al micro-servicio local)
 
 document.getElementById('multaForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const fechaInput = document.getElementById('fechaInfraccion').value;
     const montoTributo = parseFloat(document.getElementById('montoTributo').value);
 
-    // Limpiar y mostrar estado de carga
     document.getElementById('multaFinal').textContent = '';
     document.getElementById('tcInfo').textContent = '';
     document.getElementById('error').style.display = 'none';
@@ -14,76 +13,46 @@ document.getElementById('multaForm').addEventListener('submit', function(e) {
     if (fechaInput && !isNaN(montoTributo) && montoTributo > 0) {
         calcularMulta(fechaInput, montoTributo);
     } else {
-        mostrarError("Por favor, ingrese una fecha y un monto de tributo válido (mayor a 0).");
+        mostrarError("Por favor, ingrese una fecha y un monto de tributo válido.");
         document.getElementById('loading').style.display = 'none';
     }
 });
 
-// Parámetros de la API
-// *PROXY ESTABLE*: Se ha cambiado a un proxy diferente, ya que 'allorigins' también puede fallar.
-// Este patrón de proxy (JSONP o un servicio de proxy de JSON) es más fiable para entornos estáticos.
-const PROXY_URL = 'https://cors-proxy.fringe.zone/api/?url='; // Proxy JSONP/API
-const BCRP_API_BASE = 'https://estadisticas.bcrp.gob.pe/estadisticas/series/api/';
-const TC_VENTA_SERIE = 'PD04641PD'; // Tipo de Cambio Venta (dólar)
-const FORMATO = 'json';
+// URL de tu nuevo micro-servicio, que Vercel/Netlify mapean a api/tc.js
+const INTERNAL_API_URL = '/api/tc'; 
 
 /**
- * Busca el tipo de cambio para una fecha, retrocediendo si es día no hábil.
+ * Busca el tipo de cambio llamando a la función Serverless del propio despliegue.
+ * Esto resuelve el problema de CORS y de proxies inestables.
+ * @param {string} fechaStr - Fecha en formato YYYY-MM-DD
  */
-async function obtenerTipoCambio(fechaStr, diasRestantes = 5) {
-    if (diasRestantes <= 0) {
-        throw new Error("No se pudo obtener el Tipo de Cambio en el rango de búsqueda (5 días). Revise la fecha.");
-    }
-
+async function obtenerTipoCambio(fechaStr) {
     try {
-        // 1. Construir la URL del BCRP
-        const BCRP_URL = `${BCRP_API_BASE}${TC_VENTA_SERIE}/${FORMATO}/${fechaStr}/${fechaStr}`;
+        const url = `${INTERNAL_API_URL}?fecha=${fechaStr}`;
+        const response = await fetch(url);
         
-        // 2. Usar el Proxy para resolver CORS.
-        const urlConProxy = PROXY_URL + encodeURIComponent(BCRP_URL);
-
-        const response = await fetch(urlConProxy);
+        const data = await response.json();
         
         if (!response.ok) {
-            throw new Error(`La solicitud al Proxy falló con código ${response.status}.`);
+            // Si el backend devolvió un error (400, 500, etc.)
+            throw new Error(data.error || 'Error desconocido en el micro-servicio.');
         }
 
-        const data = await response.json();
-
-        // 3. Procesar la respuesta del BCRP (que viene dentro del JSON del proxy)
-        if (data.series && data.series.length > 0 && data.series[0].periodos && data.series[0].periodos.length > 0) {
-            
-            const tcValor = parseFloat(data.series[0].periodos[0].valores[0]);
-            
-            if (isNaN(tcValor) || tcValor <= 0) {
-                throw new Error("Valor de tipo de cambio no encontrado para la fecha.");
-            }
-            
-            return {
-                tc: tcValor,
-                fechaUtilizada: data.series[0].periodos[0].fecha
-            };
-        }
+        // Si la respuesta es exitosa (200)
+        return data; 
         
-        // 4. Retroceder un día si no hay datos (regla SUNAT)
-        const fechaActual = new Date(fechaStr + 'T00:00:00');
-        fechaActual.setDate(fechaActual.getDate() - 1);
-        const fechaAnteriorStr = fechaActual.toISOString().slice(0, 10);
-        
-        console.log(`Buscando día hábil anterior: ${fechaAnteriorStr}`);
-        return obtenerTipoCambio(fechaAnteriorStr, diasRestantes - 1);
-
     } catch (error) {
-        // Manejo de errores de red o parsing
-        throw new Error("Error de conexión al obtener el TC: " + error.message);
+        console.error("Error al obtener TC:", error);
+        throw new Error("Error de conexión con el servicio de tipo de cambio: " + error.message);
     }
 }
 
 /**
- * Realiza el cálculo final de la multa. (Mantenemos esta función igual)
+ * Realiza el cálculo final de la multa.
  */
 async function calcularMulta(fechaStr, montoUSD) {
     try {
+        // La función obtenerTipoCambio ahora llama al micro-servicio
         const { tc, fechaUtilizada } = await obtenerTipoCambio(fechaStr);
         
         // --- Lógica del Cálculo (2 x Tributo x TC) ---
