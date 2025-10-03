@@ -1,0 +1,8 @@
+{
+  "name": "sunat-multa-pwa-backend",
+  "version": "1.0.0",
+  "description": "Backend simple para obtener TC del BCRP",
+  "dependencies": {
+    "node-fetch": "^2.6.1"
+  }
+}
