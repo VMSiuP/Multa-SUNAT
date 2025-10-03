@@ -1,9 +1,10 @@
 document.getElementById('multaForm').addEventListener('submit', function(e) {
     e.preventDefault();
+    // Obtener y validar las entradas del usuario
     const fechaInput = document.getElementById('fechaInfraccion').value;
     const montoTributo = parseFloat(document.getElementById('montoTributo').value);
 
-    // Limpiar resultados anteriores
+    // Limpiar y mostrar estado de carga
     document.getElementById('multaFinal').textContent = '';
     document.getElementById('tcInfo').textContent = '';
     document.getElementById('error').style.display = 'none';
@@ -12,60 +13,71 @@ document.getElementById('multaForm').addEventListener('submit', function(e) {
     if (fechaInput && !isNaN(montoTributo) && montoTributo > 0) {
         calcularMulta(fechaInput, montoTributo);
     } else {
-        mostrarError("Por favor, ingrese una fecha y un monto de tributo válido.");
+        mostrarError("Por favor, ingrese una fecha y un monto de tributo válido (mayor a 0).");
+        document.getElementById('loading').style.display = 'none';
     }
 });
 
-// Parámetros de la API
+// Parámetros y URL de la API
+// *IMPORTANTE*: Se ha cambiado el proxy a 'https://api.allorigins.win/raw?url='
+// para solucionar los problemas de bloqueo y CORS en el entorno de producción.
+const PROXY_URL = 'https://api.allorigins.win/raw?url='; 
 const BCRP_API_BASE = 'https://estadisticas.bcrp.gob.pe/estadisticas/series/api/';
-const TC_VENTA_SERIE = 'PD04641PD'; // Código para Tipo de Cambio Venta (dólar)
+const TC_VENTA_SERIE = 'PD04641PD'; // Tipo de Cambio Venta (dólar)
 const FORMATO = 'json';
 
 /**
- * Busca el tipo de cambio para una fecha dada, retrocediendo si es día no hábil.
+ * Busca el tipo de cambio para una fecha, retrocediendo si es día no hábil (regla SUNAT).
  * @param {string} fechaStr - Fecha en formato YYYY-MM-DD
- * @param {number} maxDias - Máximo de días a retroceder (seguridad para evitar bucles infinitos)
+ * @param {number} diasRestantes - Límite de intentos de búsqueda hacia atrás.
  */
-async function obtenerTipoCambio(fechaStr, maxDias = 5) {
-    if (maxDias <= 0) {
-        throw new Error("No se pudo obtener el Tipo de Cambio después de varios intentos. Intente con una fecha más cercana.");
+async function obtenerTipoCambio(fechaStr, diasRestantes = 5) {
+    if (diasRestantes <= 0) {
+        throw new Error("No se pudo obtener el Tipo de Cambio en el rango de búsqueda (5 días). Intente con una fecha más reciente.");
     }
 
     try {
-        const url = `${BCRP_API_BASE}${TC_VENTA_SERIE}/${FORMATO}/${fechaStr}/${fechaStr}`;
-        const response = await fetch(url);
+        // 1. Construir la URL del BCRP para la fecha actual
+        const BCRP_URL = `${BCRP_API_BASE}${TC_VENTA_SERIE}/${FORMATO}/${fechaStr}/${fechaStr}`;
+        
+        // 2. Usar el Proxy para sortear el bloqueo CORS. La URL del BCRP debe ser codificada.
+        const urlConProxy = PROXY_URL + encodeURIComponent(BCRP_URL);
+
+        const response = await fetch(urlConProxy);
         
         if (!response.ok) {
-            throw new Error(`Error en la consulta a la API BCRP: ${response.statusText}`);
+            throw new Error(`La solicitud a la API BCRP falló: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
 
-        // Verificar si la serie tiene datos (la API retorna un array de series)
+        // 3. Procesar la respuesta para verificar si hay datos
         if (data.series && data.series.length > 0 && data.series[0].periodos && data.series[0].periodos.length > 0) {
             
-            // El valor del tipo de cambio está en data.series[0].periodos[0].valores[0]
             const tcValor = parseFloat(data.series[0].periodos[0].valores[0]);
             
-            if (isNaN(tcValor)) {
-                throw new Error("Valor de tipo de cambio no encontrado para la fecha.");
+            if (isNaN(tcValor) || tcValor <= 0) {
+                // Si el valor es inválido, puede significar un error de datos.
+                throw new Error("Valor de tipo de cambio no válido para la fecha consultada.");
             }
             
+            // Éxito: devolver el TC y la fecha real del dato
             return {
                 tc: tcValor,
-                fechaUtilizada: data.series[0].periodos[0].fecha // Fecha real del dato
+                fechaUtilizada: data.series[0].periodos[0].fecha
             };
         }
         
-        // Si no hay datos para esa fecha, retroceder al día anterior (regla SUNAT)
-        const fechaActual = new Date(fechaStr + 'T00:00:00'); // 'T00:00:00' para evitar problemas de zona horaria
+        // 4. Si no hay datos (día no hábil), retroceder un día y reintentar
+        const fechaActual = new Date(fechaStr + 'T00:00:00');
         fechaActual.setDate(fechaActual.getDate() - 1);
         const fechaAnteriorStr = fechaActual.toISOString().slice(0, 10);
         
-        return obtenerTipoCambio(fechaAnteriorStr, maxDias - 1);
+        console.log(`Fecha no hábil o sin datos. Buscando el día hábil anterior: ${fechaAnteriorStr}`);
+        return obtenerTipoCambio(fechaAnteriorStr, diasRestantes - 1);
 
     } catch (error) {
-        console.error("Error al obtener TC:", error);
+        // Manejo de errores de red o parsing
         throw new Error("Error de conexión o formato de la API: " + error.message);
     }
 }
@@ -77,26 +89,25 @@ async function calcularMulta(fechaStr, montoUSD) {
     try {
         const { tc, fechaUtilizada } = await obtenerTipoCambio(fechaStr);
         
-        // --- Lógica del Cálculo ---
-        // 1. Convertir tributo dejado de pagar a Soles (S/)
-        const tributoEnSoles = montoUSD * tc;
-        
-        // 2. Aplicar la multa (2 veces el tributo dejado de pagar)
-        const multaFinalSoles = tributoEnSoles * 2;
+        // --- Lógica del Cálculo (2 x Tributo x TC) ---
+        // Formula: Multa (S/) = 2 * Monto USD * TC Venta
+        const multaFinalSoles = montoUSD * tc * 2;
         
         // --- Mostrar Resultado ---
         document.getElementById('loading').style.display = 'none';
         
-        // Formato para Soles Peruanos (S/ 1,234.56)
+        // Formato de moneda peruana (S/)
         const formatter = new Intl.NumberFormat('es-PE', {
             style: 'currency',
             currency: 'PEN',
             minimumFractionDigits: 2
         });
 
+        // Mostrar información del TC utilizado
         document.getElementById('tcInfo').innerHTML = 
-            `**T.C. Venta:** ${tc.toFixed(4)} S/ (Fecha del dato: ${fechaUtilizada.split('-').reverse().join('/')})`;
+            `**T.C. Venta:** ${tc.toFixed(4)} S/ (Dato del BCRP para la fecha: ${fechaUtilizada.split('-').reverse().join('/')})`;
         
+        // Mostrar la multa final
         document.getElementById('multaFinal').textContent = 
             `Multa Total: ${formatter.format(multaFinalSoles)}`;
 
