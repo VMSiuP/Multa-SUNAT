@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Multas SUNAT - PWA</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Calculadora Automática de Multas (SUNAT)</h1>
+        <p>Ingrese los datos para calcular la multa (2x tributo dejado de pagar).</p>
+
+        <form id="multaForm">
+            <div class="input-group">
+                <label for="fechaInfraccion">Fecha de la Infracción:</label>
+                <input type="date" id="fechaInfraccion" required>
+            </div>
+
+            <div class="input-group">
+                <label for="montoTributo">Monto Tributo Dejado de Pagar (USD):</label>
+                <input type="number" id="montoTributo" step="0.01" min="0.01" required>
+            </div>
+            
+            <button type="submit">Calcular Multa</button>
+        </form>
+
+        <div id="resultado" class="resultado-area">
+            <h2>Resultado del Cálculo</h2>
+            <p id="tcInfo"></p>
+            <p id="multaFinal"></p>
+        </div>
+        
+        <div id="loading" class="loading" style="display: none;">Calculando...</div>
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
