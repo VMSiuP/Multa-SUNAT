@@ -2,3 +2,9 @@
 
 [build]
   functions = "api"
+  command = "npm install" 
+
+[[redirects]]
+  from = "/api/tc"
+  to = "/.netlify/functions/tc"
+  status = 200
