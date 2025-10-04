@@ -23,9 +23,9 @@ exports.handler = async (event, context) => {
 /**
  * Función central de consulta que consulta al BCRP y maneja el retroceso de fechas.
  */
-async function obtenerTipoCambioServer(fechaStr, diasRestantes = 5) {
+async function obtenerTipoCambioServer(fechaStr, diasRestantes = 10) {
     if (diasRestantes <= 0) {
-        throw new Error("No se pudo obtener el Tipo de Cambio en 5 días. La fecha podría ser muy antigua o errónea.");
+        throw new Error("No se pudo obtener el Tipo de Cambio en el rango de búsqueda. La fecha podría ser demasiado antigua o errónea.");
     }
 
     const url = `${BCRP_API_BASE}${TC_VENTA_SERIE}/${FORMATO}/${fechaStr}/${fechaStr}`;
@@ -69,3 +69,4 @@ async function obtenerTipoCambioServer(fechaStr, diasRestantes = 5) {
     
     return obtenerTipoCambioServer(fechaAnteriorStr, diasRestantes - 1);
 }
+
