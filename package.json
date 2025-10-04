@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Backend simple para obtener TC del BCRP",
   "dependencies": {
-    "node-fetch": "^2.6.1"
+    "node-fetch": "^2.6.7" 
+    /* Usamos la versión 2.x, compatible con CommonJS (require) */
   }
 }
