@@ -19,7 +19,7 @@ document.getElementById('multaForm').addEventListener('submit', function(e) {
 });
 
 // Usamos la ruta limpia que el netlify.toml redirige
-const INTERNAL_API_URL = '/api/tc'; 
+const INTERNAL_API_URL = https://multa-sunat-116328042501.southamerica-west1.run.app; 
 
 /**
  * Llama a la función Serverless del propio despliegue.
@@ -81,3 +81,4 @@ function mostrarError(mensaje) {
     errorDiv.textContent = `ERROR: ${mensaje}`;
     errorDiv.style.display = 'block';
 }
+
