@@ -18,18 +18,17 @@ document.getElementById('multaForm').addEventListener('submit', function(e) {
     }
 });
 
-// URL de tu micro-servicio. Netlify/Vercel la mapea a api/tc.js
-const INTERNAL_API_URL = '/.netlify/functions/tc'; // RUTA CORREGIDA PARA NETLIFY
+// Usamos la ruta limpia que el netlify.toml redirige
+const INTERNAL_API_URL = '/api/tc'; 
 
 /**
- * Busca el tipo de cambio llamando a la función Serverless del propio despliegue.
+ * Llama a la función Serverless del propio despliegue.
  */
 async function obtenerTipoCambio(fechaStr) {
     try {
         const url = `${INTERNAL_API_URL}?fecha=${fechaStr}`;
         const response = await fetch(url);
         
-        // Intentar parsear el JSON
         const data = await response.json();
         
         if (!response.ok) {
@@ -37,7 +36,6 @@ async function obtenerTipoCambio(fechaStr) {
             throw new Error(data.error || 'Error desconocido en el micro-servicio.');
         }
 
-        // Si la respuesta es exitosa (200)
         return data; 
         
     } catch (error) {
