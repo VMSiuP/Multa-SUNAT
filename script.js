@@ -1,4 +1,4 @@
-// script.js (Frontend - Llama al micro-servicio local)
+// script.js (Frontend - Llama al micro-servicio interno)
 
 document.getElementById('multaForm').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -18,23 +18,22 @@ document.getElementById('multaForm').addEventListener('submit', function(e) {
     }
 });
 
-// URL de tu nuevo micro-servicio, que Vercel/Netlify mapean a api/tc.js
-const INTERNAL_API_URL = '/api/tc'; 
+// URL de tu micro-servicio. Netlify/Vercel la mapea a api/tc.js
+const INTERNAL_API_URL = '/.netlify/functions/tc'; // RUTA CORREGIDA PARA NETLIFY
 
 /**
  * Busca el tipo de cambio llamando a la función Serverless del propio despliegue.
- * Esto resuelve el problema de CORS y de proxies inestables.
- * @param {string} fechaStr - Fecha en formato YYYY-MM-DD
  */
 async function obtenerTipoCambio(fechaStr) {
     try {
         const url = `${INTERNAL_API_URL}?fecha=${fechaStr}`;
         const response = await fetch(url);
         
+        // Intentar parsear el JSON
         const data = await response.json();
         
         if (!response.ok) {
-            // Si el backend devolvió un error (400, 500, etc.)
+            // Si el backend devolvió un error (400, 500), el mensaje está en data.error
             throw new Error(data.error || 'Error desconocido en el micro-servicio.');
         }
 
@@ -48,17 +47,14 @@ async function obtenerTipoCambio(fechaStr) {
 }
 
 /**
- * Realiza el cálculo final de la multa.
+ * Realiza el cálculo final de la multa. (Lógica de 2x tributo)
  */
 async function calcularMulta(fechaStr, montoUSD) {
     try {
-        // La función obtenerTipoCambio ahora llama al micro-servicio
         const { tc, fechaUtilizada } = await obtenerTipoCambio(fechaStr);
         
-        // --- Lógica del Cálculo (2 x Tributo x TC) ---
         const multaFinalSoles = montoUSD * tc * 2;
         
-        // --- Mostrar Resultado ---
         document.getElementById('loading').style.display = 'none';
         
         const formatter = new Intl.NumberFormat('es-PE', {
